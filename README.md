@@ -42,14 +42,127 @@ list everything. The matched reason is logged and shown in the UI.
 
 An example Flux deployment lives in `./example/`.
 
-### Kubernetes
-
 The container expects to run inside the cluster with a ServiceAccount that can
 read workloads and scale them.
 
 ```bash
 kubectl apply -f example/helm-release.yaml   # adjust RBAC / targets first
 ```
+
+### Example (Flux + bjw-s `app-template`)
+
+A self-contained `HelmRelease` (the exact setup my cluster uses):
+
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: nvidia-replica-scaler-webui
+  namespace: gpu
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: app-template
+      version: 4.6.2          # see ServiceAccount gotcha below
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s-charts
+        namespace: flux-system
+
+  values:
+    defaultPodOptions:
+      automountServiceAccountToken: true
+
+    serviceAccount:
+      nvidia-replica-scaler-webui:
+        enabled: true
+
+    rbac:
+      roles:
+        nvidia-replica-scaler-webui:
+          enabled: true
+          type: ClusterRole
+          rules:
+            - apiGroups: ["apps"]
+              resources: ["deployments", "deployments/status", "deployments/scale",
+                           "statefulsets", "statefulsets/status", "statefulsets/scale"]
+              verbs: ["get", "list", "patch", "update"]
+            - apiGroups: [""]
+              resources: ["configmaps"]   # persists desired state
+              verbs: ["get", "list", "create", "update", "patch"]
+            - apiGroups: [""]
+              resources: ["pods", "persistentvolumeclaims"]
+              verbs: ["get", "list"]
+      bindings:
+        nvidia-replica-scaler-webui:
+          enabled: true
+          type: ClusterRoleBinding
+          roleRef:
+            identifier: nvidia-replica-scaler-webui
+          subjects:
+            - identifier: nvidia-replica-scaler-webui
+
+    controllers:
+      nvidia-replica-scaler-webui:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/niki-on-github/nvidia-replica-scaler-webui
+              tag: "v0.1.0"
+            env:
+              NAMESPACES: "gpu"          # comma-separated; empty = all
+              GPU_RUNTIME_CLASS: "nvidia"
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet: { path: /health, port: 8080 }
+                  initialDelaySeconds: 5
+
+    service:
+      webui:
+        controller: nvidia-replica-scaler-webui
+        ports:
+          http: { port: 8080 }
+
+    ingress:
+      webui:
+        className: traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        hosts:
+          - host: &ingress "nvidia-replica-scaler-webui.example.com"
+            paths:
+              - path: /
+                pathType: Prefix
+                service:
+                  identifier: webui
+                  port: http
+        tls:
+          - hosts: [*ingress]
+```
+
+> [!IMPORTANT]
+> **The pod must run with the RBAC-bound ServiceAccount.** If the pod runs as
+> the `default` ServiceAccount, every list hits `403 Forbidden` and the UI shows
+> *"No GPU workloads discovered."* With `app-template` **4.6.2** the pod
+> automatically uses the ServiceAccount whose key matches the controller name.
+> On **older chart versions (e.g. 4.0.1) that auto-wiring does NOT happen** —
+> the pod stays on `default` — so pin the SA explicitly:
+>
+> ```yaml
+> controllers:
+>   nvidia-replica-scaler-webui:
+>     serviceAccount:
+>       name: nvidia-replica-scaler-webui
+>     containers:
+>       app: ...
+> ```
+
+The web UI itself is **not** a GPU workload (no `runtimeClassName: nvidia`), so
+it never matches its own heuristic and won't list itself.
 
 ### RBAC Permissions
 
