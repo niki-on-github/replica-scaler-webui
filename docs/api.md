@@ -1,4 +1,4 @@
-# NVidia Replica Scaler WebUI - API
+# Replica Scaler WebUI - API
 
 ## `GET /health`
 
@@ -6,7 +6,7 @@ Liveness probe. Returns `ok`.
 
 ## `GET /api/targets`
 
-Lists all discovered GPU workloads (Deployments and StatefulSets), including
+Lists all discovered managed workloads (Deployments and StatefulSets), including
 those currently at `replicas: 0`.
 
 Response: `200 OK`
@@ -21,8 +21,8 @@ Response: `200 OK`
     "ready_replicas": 0,
     "available_replicas": 0,
     "desired_replicas": 1,
-    "gpu": true,
-    "match_reason": "runtimeClassName=nvidia",
+    "selected": true,
+    "match_reason": "label replica-scaler.webui.io/managed=true",
     "state": "stopped"
   }
 ]
@@ -33,8 +33,8 @@ Response: `200 OK`
 | `replicas` | `.spec.replicas` (may be `null` when the manifest does not set it) |
 | `ready_replicas` / `available_replicas` | status fields |
 | `desired_replicas` | the persisted replica count requested via the UI (`null` = never scaled) |
-| `gpu` | whether the GPU heuristic matched |
-| `match_reason` | what triggered the match, e.g. `runtimeClassName=nvidia`, `env NVIDIA_VISIBLE_DEVICES`, `resources.limits.nvidia.com/gpu` |
+| `selected` | whether the workload carries the configured selector label |
+| `match_reason` | what triggered the match, e.g. `label replica-scaler.webui.io/managed=true` |
 | `state` | `running` \| `stopped` \| `pending` |
 
 ## `POST /api/targets/{namespace}/{name}/scale`
@@ -51,4 +51,4 @@ Request body:
 Response: `200 OK` with the refreshed target object.
 
 Errors: `400` with `{ "error": "..." }` if the workload does not exist (or does
-not match the GPU filter) or the scale PATCH failed.
+not carry the selector label) or the scale PATCH failed.

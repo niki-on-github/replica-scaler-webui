@@ -1,5 +1,5 @@
 [package]
-name = "nvidia-replica-scaler-webui-backend"
+name = "replica-scaler-webui-backend"
 version.workspace = true
 edition.workspace = true
 

@@ -1,9 +1,9 @@
-# NVidia Replica Scaler WebUI - Development Guide
+# Replica Scaler WebUI - Development Guide
 
 ## Project Structure
 
 ```
-nvidia-replica-scaler-webui/
+replica-scaler-webui/
 ├── backend/                    # Axum REST API
 │   └── src/
 │       ├── main.rs             # Entry point, router setup
@@ -35,14 +35,14 @@ nvidia-replica-scaler-webui/
 ## Development Commands
 
 ```bash
-cd nvidia-replica-scaler-webui
+cd replica-scaler-webui
 
 # Enter dev shell
 nix develop --accept-flake-config
 
 # Backend
-cargo check -p nvidia-replica-scaler-webui-backend
-cargo build -p nvidia-replica-scaler-webui-backend
+cargo check -p replica-scaler-webui-backend
+cargo build -p replica-scaler-webui-backend
 
 # Frontend
 cd frontend && npm install && npm run dev
@@ -74,7 +74,7 @@ cargo fmt
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/apis/apps/v1/deployments` (+ `?fieldSelector`/namespace) | List Deployments |
+| `/apis/apps/v1/deployments` (+ `?labelSelector`/namespace) | List Deployments |
 | `/apis/apps/v1/statefulsets` | List StatefulSets |
 | `/apis/apps/v1/namespaces/{ns}/deployments/{name}` | Read a Deployment |
 | `/apis/apps/v1/namespaces/{ns}/deployments/{name}/scale` | Scale a Deployment |
@@ -85,8 +85,8 @@ cargo fmt
 ## Docker Build
 
 ```bash
-docker build -t nvidia-replica-scaler-webui:latest .
-docker run -p 8080:8080 nvidia-replica-scaler-webui:latest
+docker build -t replica-scaler-webui:latest .
+docker run -p 8080:8080 replica-scaler-webui:latest
 ```
 
 ## Code Conventions

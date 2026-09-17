@@ -26,7 +26,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY backend/Cargo.toml backend/
 COPY backend/src backend/src/
-RUN cargo build --release --bin nvidia-replica-scaler-webui-backend
+RUN cargo build --release --bin replica-scaler-webui-backend
 
 # ---- Final stage ----
 FROM debian:bookworm-slim AS runner
@@ -39,11 +39,11 @@ WORKDIR /app
 RUN mkdir -p public
 
 # Copy backend binary and built frontend files
-COPY --from=builder /app/target/release/nvidia-replica-scaler-webui-backend /app/nvidia-replica-scaler-webui
+COPY --from=builder /app/target/release/replica-scaler-webui-backend /app/replica-scaler-webui
 COPY --from=builder /app/frontend/dist /app/public
 
 EXPOSE 8080
 
 ENV RUST_LOG=info
 
-ENTRYPOINT ["/app/nvidia-replica-scaler-webui"]
+ENTRYPOINT ["/app/replica-scaler-webui"]

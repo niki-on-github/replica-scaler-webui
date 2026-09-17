@@ -1,5 +1,5 @@
 {
-  description = "NVidia Replica Scaler WebUI - Rust backend + React frontend";
+  description = "Replica Scaler WebUI - Rust backend + React frontend";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 

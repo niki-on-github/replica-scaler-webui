@@ -26,7 +26,7 @@ export function TargetsTable({
   if (targets.length === 0) {
     return (
       <div className="rounded-lg border bg-card text-card-foreground p-8 text-center text-sm text-muted-foreground">
-        No GPU workloads discovered.
+        No managed workloads discovered.
       </div>
     );
   }

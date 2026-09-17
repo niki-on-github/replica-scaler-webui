@@ -79,14 +79,14 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting NVidia Replica Scaler WebUI (RUST_LOG={})", rust_log);
+    tracing::info!("Starting Replica Scaler WebUI (RUST_LOG={})", rust_log);
 
     let cfg = config::Config::from_env();
     tracing::info!(
-        "Config: namespaces={:?} gpu_runtime_class={} include_non_gpu={} state_configmap={} state_namespace={}",
+        "Config: namespaces={:?} selector_key={} selector_value={} state_configmap={} state_namespace={}",
         cfg.namespaces,
-        cfg.gpu_runtime_class,
-        cfg.include_non_gpu,
+        cfg.selector_key,
+        cfg.selector_value,
         cfg.state_configmap,
         cfg.state_namespace
     );

@@ -12,9 +12,9 @@ pub struct Target {
     pub available_replicas: Option<i64>,
     /// Persisted desired state (what the web UI last requested).
     pub desired_replicas: Option<i64>,
-    /// True when the workload matched the GPU heuristic.
-    pub gpu: bool,
-    /// Why it was matched (e.g. "runtimeClassName=nvidia").
+    /// True when the workload carries the configured selector label.
+    pub selected: bool,
+    /// Why it was matched (e.g. "label replica-scaler.webui.io/managed=true").
     pub match_reason: String,
     /// "running" | "stopped" | "pending".
     pub state: String,

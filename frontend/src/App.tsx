@@ -55,7 +55,7 @@ export default function App() {
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-primary">NVidia Replica Scaler WebUI</h1>
+          <h1 className="text-xl font-bold text-primary">Replica Scaler WebUI</h1>
           <Button variant="outline" size="sm" onClick={() => loadTargets()}>
             <RefreshCw className={`mr-1 h-3 w-3 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -73,7 +73,7 @@ export default function App() {
 
       <main className="p-6">
         <p className="mb-4 text-sm text-muted-foreground">
-          Start (1 replica) and stop (0 replicas) GPU workloads.
+          Start (1 replica) and stop (0 replicas) managed workloads.
         </p>
         <TargetsTable targets={targets} onScale={handleScale} />
       </main>

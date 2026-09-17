@@ -6,13 +6,13 @@
 nix develop --accept-flake-config   # rustc, cargo, openssl, pkg-config, nodejs
 
 # Backend
-cargo check -p nvidia-replica-scaler-webui-backend
+cargo check -p replica-scaler-webui-backend
 
 # Frontend (dev server proxies /api -> localhost:8080)
 cd frontend && npm install && npm run dev
 
 # Backend in another terminal
-cargo run -p nvidia-replica-scaler-webui-backend
+cargo run -p replica-scaler-webui-backend
 
 # Production frontend build
 cd frontend && npx tsc -b && npx vite build
@@ -35,8 +35,8 @@ list any workloads, which is expected. Run it against a real cluster via
 - `frontend/src/components/targets-table.tsx` — the table UI. Buttons call
   `api.scaleTarget`.
 
-## Changing the GPU heuristic
+## Changing the selection label
 
-Edit `is_gpu()` in `backend/src/k8s.rs`. It returns `(matched, reason)` and is
-also used to decide which workloads become scale targets. `INCLUDE_NON_GPU=true`
-lists everything regardless.
+Edit `matches_selector()` in `backend/src/k8s.rs`. It returns `(matched, reason)`
+and is also used to decide which workloads become scale targets. The label key /
+value are configurable via `SELECTOR_KEY` / `SELECTOR_VALUE`.

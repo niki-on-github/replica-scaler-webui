@@ -193,22 +193,28 @@ impl KubeClient {
     // Discovery
     // ------------------------------------------------------------------
 
-    fn list_urls(kind_plural: &str, namespaces: &[String]) -> Vec<String> {
+    fn list_urls(kind_plural: &str, namespaces: &[String], label_selector: &str) -> Vec<String> {
+        let selector = if label_selector.is_empty() {
+            String::new()
+        } else {
+            format!("?labelSelector={}", urlencode(label_selector))
+        };
         if namespaces.is_empty() {
-            vec![format!("/apis/apps/v1/{}", kind_plural)]
+            vec![format!("/apis/apps/v1/{}{}", kind_plural, selector)]
         } else {
             namespaces
                 .iter()
-                .map(|ns| format!("/apis/apps/v1/namespaces/{}/{}", ns, kind_plural))
+                .map(|ns| format!("/apis/apps/v1/namespaces/{}/{}{}", ns, kind_plural, selector))
                 .collect()
         }
     }
 
     pub async fn discover(&self, cfg: &Config) -> Vec<Target> {
         let mut targets = Vec::new();
+        let selector = format!("{}={}", cfg.selector_key, cfg.selector_value);
 
         for (kind, plural) in [("Deployment", "deployments"), ("StatefulSet", "statefulsets")] {
-            for path in Self::list_urls(plural, &cfg.namespaces) {
+            for path in Self::list_urls(plural, &cfg.namespaces, &selector) {
                 match self.request("GET", &path, None).await {
                     Ok(resp) => {
                         let Some(items) = resp.get("items").and_then(|v| v.as_array()) else {
@@ -230,10 +236,7 @@ impl KubeClient {
                                 continue;
                             };
 
-                            let (gpu, reason) = is_gpu(item, &cfg.gpu_runtime_class);
-                            if !gpu && !cfg.include_non_gpu {
-                                continue;
-                            }
+                            let (selected, reason) = matches_selector(item, &cfg.selector_key, &cfg.selector_value);
 
                             let replicas = item.pointer("/spec/replicas").and_then(|v| v.as_i64());
                             let ready = item.pointer("/status/readyReplicas").and_then(|v| v.as_i64());
@@ -247,7 +250,7 @@ impl KubeClient {
                                 ready_replicas: ready,
                                 available_replicas: available,
                                 desired_replicas: None,
-                                gpu,
+                                selected,
                                 match_reason: reason,
                                 state: compute_state(replicas, ready),
                             });
@@ -352,41 +355,29 @@ impl KubeClient {
     }
 }
 
-/// The GPU heuristic. Returns (is_gpu, reason).
-pub fn is_gpu(workload: &Value, runtime_class: &str) -> (bool, String) {
-    if let Some(rc) = workload
-        .pointer("/spec/template/spec/runtimeClassName")
-        .and_then(|v| v.as_str())
-    {
-        if rc == runtime_class {
-            return (true, format!("runtimeClassName={}", rc));
+/// The selection heuristic: a workload is manageable when its `metadata.labels`
+/// contains `selector_key=selector_value`. Returns (selected, reason).
+pub fn matches_selector(workload: &Value, selector_key: &str, selector_value: &str) -> (bool, String) {
+    if let Some(labels) = workload.pointer("/metadata/labels").and_then(|v| v.as_object()) {
+        if labels.get(selector_key).and_then(|v| v.as_str()) == Some(selector_value) {
+            return (true, format!("label {}={}", selector_key, selector_value));
         }
     }
-
-    if let Some(containers) = workload.pointer("/spec/template/spec/containers").and_then(|v| v.as_array()) {
-        for c in containers {
-            if let Some(envs) = c.get("env").and_then(|e| e.as_array()) {
-                for e in envs {
-                    if e.get("name").and_then(|n| n.as_str()) == Some("NVIDIA_VISIBLE_DEVICES") {
-                        return (true, "env NVIDIA_VISIBLE_DEVICES".to_string());
-                    }
-                }
-            }
-            if let Some(resources) = c.get("resources") {
-                for field in ["limits", "requests"] {
-                    if let Some(map) = resources.get(field).and_then(|r| r.as_object()) {
-                        for key in map.keys() {
-                            if key.to_lowercase().contains("gpu") {
-                                return (true, format!("resources.{}.{}", field, key));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     (false, String::new())
+}
+
+/// Percent-encode a labelSelector value for a query string.
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'=' | b'!' | b'(' | b')' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 fn compute_state(replicas: Option<i64>, ready: Option<i64>) -> String {

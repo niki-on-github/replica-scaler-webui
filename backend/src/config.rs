@@ -4,10 +4,10 @@ use std::fs;
 pub struct Config {
     /// Namespaces to scan. Empty = all namespaces.
     pub namespaces: Vec<String>,
-    /// RuntimeClassName used in the GPU heuristic.
-    pub gpu_runtime_class: String,
-    /// Also list workloads that are not detected as GPU.
-    pub include_non_gpu: bool,
+    /// Label key used to select manageable workloads.
+    pub selector_key: String,
+    /// Label value that a workload must carry to be manageable.
+    pub selector_value: String,
     /// Name of the ConfigMap that persists desired state.
     pub state_configmap: String,
     /// Namespace of the state ConfigMap (defaults to the pod's namespace).
@@ -27,12 +27,10 @@ impl Config {
             })
             .unwrap_or_default();
 
-        let gpu_runtime_class =
-            env::var("GPU_RUNTIME_CLASS").unwrap_or_else(|_| "nvidia".to_string());
+        let selector_key = env::var("SELECTOR_KEY")
+            .unwrap_or_else(|_| "replica-scaler.webui.io/managed".to_string());
 
-        let include_non_gpu = env::var("INCLUDE_NON_GPU")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false);
+        let selector_value = env::var("SELECTOR_VALUE").unwrap_or_else(|_| "true".to_string());
 
         let state_configmap = env::var("STATE_CONFIGMAP")
             .unwrap_or_else(|_| "replica-scaler-state".to_string());
@@ -51,8 +49,8 @@ impl Config {
 
         Self {
             namespaces,
-            gpu_runtime_class,
-            include_non_gpu,
+            selector_key,
+            selector_value,
             state_configmap,
             state_namespace,
         }

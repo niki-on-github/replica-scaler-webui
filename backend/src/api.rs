@@ -53,7 +53,7 @@ pub async fn scale_target(
         .find(|t| t.namespace == ns && t.name == name)
         .ok_or_else(|| ErrorResponse {
             error: format!(
-                "Workload {}/{} not found (or not a GPU workload)",
+                "Workload {}/{} not found (or not managed by this scaler)",
                 ns, name
             ),
         })?;

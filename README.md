@@ -1,10 +1,10 @@
-# NVidia Replica Scaler WebUI
+# Replica Scaler WebUI
 
-A web-based on/off switch for **GPU workloads** (Deployments and StatefulSets)
-on Kubernetes. Start (1 replica) / Stop (0 replicas) any workload that uses a
-GPU, with a simple table UI.
+A web-based on/off switch for **Kubernetes workloads** (Deployments and
+StatefulSets). Start (1 replica) / Stop (0 replicas) any workload that carries a
+selector label you opt in with, through a simple table UI.
 
-The container **auto-discovers** GPU workloads from inside the cluster — no
+The container **auto-discovers** managed workloads from inside the cluster — no
 hardcoded target list. Workloads sitting at `replicas: 0` are still detected and
 listed, so you can start them from the UI.
 
@@ -15,9 +15,10 @@ listed, so you can start them from the UI.
 
 ## Features
 
-- **Auto-discovery**: lists every Deployment/StatefulSet that looks like a GPU
-  workload (see [GPU detection](#gpu-detection)), regardless of its current
-  replica count.
+- **Auto-discovery**: lists every Deployment/StatefulSet that carries the
+  selector label (see [Selection](#selection)), regardless of its current replica
+  count. The label query runs server-side via `?labelSelector=`, so only matching
+  workloads are ever transferred.
 - **Start / Stop**: scale any discovered workload to `1` or `0` replicas via the
   scale subresource. `replicas` is clamped to `{0, 1}` — never more than one.
 - **Persisted desired state**: the last requested replica count is stored in a
@@ -25,18 +26,24 @@ listed, so you can start them from the UI.
   recreated (Flux prune / helm upgrade) doesn't drift back to its chart default.
 - **Auto-refresh**: the dashboard polls the Kubernetes API periodically.
 
-## GPU detection
+## Selection
 
-A workload is considered a GPU workload if its pod template matches **any** of:
+A workload is manageable when its `metadata.labels` contains the configured
+selector label:
 
-1. `spec.template.spec.runtimeClassName` equals `GPU_RUNTIME_CLASS`
-   (default `nvidia`), **or**
-2. any container env var is named `NVIDIA_VISIBLE_DEVICES`, **or**
-3. any container resource `limits`/`requests` key (lowercased) contains `gpu`
-   (covers `nvidia.com/gpu`, `intel.com/gpu`, ...).
+- `SELECTOR_KEY` (default `replica-scaler.webui.io/managed`)
+- `SELECTOR_VALUE` (default `true`)
 
-Only matching workloads are listed by default. Set `INCLUDE_NON_GPU=true` to
-list everything. The matched reason is logged and shown in the UI.
+Only workloads carrying that label are listed and can be scaled. Add the label to
+any Deployment/StatefulSet you want to manage — for a bjw-s `app-template`
+HelmRelease, set it on the generated workload's metadata via your chart values
+(e.g. `controllers.<name>.labels`), or annotate the chart to render it.
+
+```yaml
+metadata:
+  labels:
+    replica-scaler.webui.io/managed: "true"
+```
 
 ## Deployment
 
@@ -57,7 +64,7 @@ A self-contained `HelmRelease` (the exact setup my cluster uses):
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: nvidia-replica-scaler-webui
+  name: replica-scaler-webui
   namespace: gpu
 spec:
   interval: 10m
@@ -75,12 +82,12 @@ spec:
       automountServiceAccountToken: true
 
     serviceAccount:
-      nvidia-replica-scaler-webui:
+      replica-scaler-webui:
         enabled: true
 
     rbac:
       roles:
-        nvidia-replica-scaler-webui:
+        replica-scaler-webui:
           enabled: true
           type: ClusterRole
           rules:
@@ -95,24 +102,25 @@ spec:
               resources: ["pods", "persistentvolumeclaims"]
               verbs: ["get", "list"]
       bindings:
-        nvidia-replica-scaler-webui:
+        replica-scaler-webui:
           enabled: true
           type: ClusterRoleBinding
           roleRef:
-            identifier: nvidia-replica-scaler-webui
+            identifier: replica-scaler-webui
           subjects:
-            - identifier: nvidia-replica-scaler-webui
+            - identifier: replica-scaler-webui
 
     controllers:
-      nvidia-replica-scaler-webui:
+      replica-scaler-webui:
         containers:
           app:
             image:
-              repository: ghcr.io/niki-on-github/nvidia-replica-scaler-webui
+              repository: ghcr.io/niki-on-github/replica-scaler-webui
               tag: "v0.1.0"
             env:
               NAMESPACES: "gpu"          # comma-separated; empty = all
-              GPU_RUNTIME_CLASS: "nvidia"
+              SELECTOR_KEY: "replica-scaler.webui.io/managed"
+              SELECTOR_VALUE: "true"
             probes:
               liveness:
                 enabled: true
@@ -123,7 +131,7 @@ spec:
 
     service:
       webui:
-        controller: nvidia-replica-scaler-webui
+        controller: replica-scaler-webui
         ports:
           http: { port: 8080 }
 
@@ -133,7 +141,7 @@ spec:
         annotations:
           traefik.ingress.kubernetes.io/router.entrypoints: websecure
         hosts:
-          - host: &ingress "nvidia-replica-scaler-webui.example.com"
+          - host: &ingress "replica-scaler-webui.example.com"
             paths:
               - path: /
                 pathType: Prefix
@@ -147,22 +155,22 @@ spec:
 > [!IMPORTANT]
 > **The pod must run with the RBAC-bound ServiceAccount.** If the pod runs as
 > the `default` ServiceAccount, every list hits `403 Forbidden` and the UI shows
-> *"No GPU workloads discovered."* With `app-template` **4.6.2** the pod
+> *"No managed workloads discovered."* With `app-template` **4.6.2** the pod
 > automatically uses the ServiceAccount whose key matches the controller name.
 > On **older chart versions (e.g. 4.0.1) that auto-wiring does NOT happen** —
 > the pod stays on `default` — so pin the SA explicitly:
 >
 > ```yaml
 > controllers:
->   nvidia-replica-scaler-webui:
+>   replica-scaler-webui:
 >     serviceAccount:
->       name: nvidia-replica-scaler-webui
+>       name: replica-scaler-webui
 >     containers:
 >       app: ...
 > ```
 
-The web UI itself is **not** a GPU workload (no `runtimeClassName: nvidia`), so
-it never matches its own heuristic and won't list itself.
+The web UI itself is **not** a managed workload (it does not carry the
+`replica-scaler.webui.io/managed` label), so it never lists itself.
 
 ### RBAC Permissions
 
@@ -186,8 +194,8 @@ permissions are present (non-fatal).
 |----------|---------|-------------|
 | `RUST_LOG` | `info` | Logging level (`trace`, `debug`, `info`, `warn`, `error`) |
 | `NAMESPACES` | *(all)* | Comma-separated namespaces to scan. Empty = all namespaces |
-| `GPU_RUNTIME_CLASS` | `nvidia` | Runtime class name used in the GPU heuristic |
-| `INCLUDE_NON_GPU` | `false` | Also list workloads that are not detected as GPU |
+| `SELECTOR_KEY` | `replica-scaler.webui.io/managed` | Label key that marks a workload as manageable |
+| `SELECTOR_VALUE` | `true` | Label value a workload must carry to be managed |
 | `STATE_CONFIGMAP` | `replica-scaler-state` | Name of the ConfigMap that persists desired state |
 | `STATE_NAMESPACE` | *(pod's own namespace)* | Namespace of the state ConfigMap |
 | `KUBERNETES_SERVICE_HOST` | auto | Kubernetes API host (auto-detected in cluster) |

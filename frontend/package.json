@@ -1,5 +1,5 @@
 {
-  "name": "nvidia-replica-scaler-webui-frontend",
+  "name": "replica-scaler-webui-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
