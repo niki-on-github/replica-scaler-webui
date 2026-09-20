@@ -8,6 +8,7 @@ export interface Target {
   ready_replicas: number | null;
   available_replicas: number | null;
   desired_replicas: number | null;
+  default_replicas: number | null;
   selected: boolean;
   match_reason: string;
   state: TargetState;

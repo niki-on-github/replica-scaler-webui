@@ -83,10 +83,12 @@ async fn main() {
 
     let cfg = config::Config::from_env();
     tracing::info!(
-        "Config: namespaces={:?} selector_key={} selector_value={} state_configmap={} state_namespace={}",
+        "Config: namespaces={:?} selector_key={} selector_value={} default_state_label={} default_state={} state_configmap={} state_namespace={}",
         cfg.namespaces,
         cfg.selector_key,
         cfg.selector_value,
+        cfg.default_state_label,
+        cfg.default_state,
         cfg.state_configmap,
         cfg.state_namespace
     );
@@ -110,6 +112,8 @@ async fn main() {
         tracing::warn!("Could not load initial state: {}", e);
     }
     state.apply_desired().await;
+    let discovered = kube.discover(&cfg).await;
+    state.apply_defaults(&discovered).await;
 
     let app_state = Arc::new(AppState {
         kube: (*kube).clone(),

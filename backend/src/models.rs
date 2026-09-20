@@ -12,6 +12,8 @@ pub struct Target {
     pub available_replicas: Option<i64>,
     /// Persisted desired state (what the web UI last requested).
     pub desired_replicas: Option<i64>,
+    /// Initial state from the default-state label, else the global fallback (0 or 1).
+    pub default_replicas: Option<i64>,
     /// True when the workload carries the configured selector label.
     pub selected: bool,
     /// Why it was matched (e.g. "label replica-scaler.webui.io/managed=true").

@@ -65,6 +65,11 @@ spec:
               # Label that marks a workload as manageable (key=value)
               SELECTOR_KEY: "replica-scaler.webui.io/managed"
               SELECTOR_VALUE: "true"
+              # Fallback initial state for workloads with no default-state label.
+              # A workload can override this per-label:
+              #   replica-scaler.webui.io/default-state: "active"|"inactive"
+              DEFAULT_STATE_LABEL: "replica-scaler.webui.io/default-state"
+              DEFAULT_STATE: "inactive"
             probes:
               liveness:
                 enabled: true

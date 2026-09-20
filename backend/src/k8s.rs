@@ -238,6 +238,9 @@ impl KubeClient {
 
                             let (selected, reason) = matches_selector(item, &cfg.selector_key, &cfg.selector_value);
 
+                            let default_replicas = default_state(item, &cfg.default_state_label)
+                                .or(Some(cfg.default_state));
+
                             let replicas = item.pointer("/spec/replicas").and_then(|v| v.as_i64());
                             let ready = item.pointer("/status/readyReplicas").and_then(|v| v.as_i64());
                             let available = item.pointer("/status/availableReplicas").and_then(|v| v.as_i64());
@@ -250,6 +253,7 @@ impl KubeClient {
                                 ready_replicas: ready,
                                 available_replicas: available,
                                 desired_replicas: None,
+                                default_replicas,
                                 selected,
                                 match_reason: reason,
                                 state: compute_state(replicas, ready),
@@ -364,6 +368,13 @@ pub fn matches_selector(workload: &Value, selector_key: &str, selector_value: &s
         }
     }
     (false, String::new())
+}
+
+/// Read the per-workload default state from its labels, if present and valid.
+pub fn default_state(workload: &Value, label_key: &str) -> Option<i64> {
+    let labels = workload.pointer("/metadata/labels")?.as_object()?;
+    let raw = labels.get(label_key)?.as_str()?;
+    crate::config::parse_state(raw)
 }
 
 /// Percent-encode a labelSelector value for a query string.

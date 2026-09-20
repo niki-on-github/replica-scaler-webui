@@ -1,4 +1,5 @@
 use crate::k8s::{KubeClient, KubeError};
+use crate::models::Target;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -109,6 +110,34 @@ impl StateStore {
             match self.kube.scale(ns, name, kind, replicas.clamp(0, 1) as u8).await {
                 Ok(_) => tracing::info!("Re-applied desired state: {} {}/{} -> {} replicas", kind, ns, name, replicas),
                 Err(e) => tracing::warn!("Failed to re-apply desired state for {}/{}: {}", ns, name, e),
+            }
+        }
+    }
+
+    /// Apply the default state (label or global fallback) to any workload that
+    /// has no persisted desired state yet, then persist it so it applies once.
+    pub async fn apply_defaults(&self, targets: &[Target]) {
+        for t in targets {
+            let key = Self::key(&t.kind, &t.namespace, &t.name);
+            if self.get(&key).is_some() {
+                continue;
+            }
+            let Some(replicas) = t.default_replicas else {
+                continue;
+            };
+            let clamped = replicas.clamp(0, 1);
+            match self.kube.scale(&t.namespace, &t.name, &t.kind, clamped as u8).await {
+                Ok(_) => {
+                    if let Err(e) = self.set(&key, clamped).await {
+                        tracing::warn!("Applied default state for {} but failed to persist: {}", key, e);
+                    } else {
+                        tracing::info!(
+                            "Applied default state: {} {}/{} -> {} replicas",
+                            t.kind, t.namespace, t.name, clamped
+                        );
+                    }
+                }
+                Err(e) => tracing::warn!("Failed to apply default state for {}/{}: {}", t.namespace, t.name, e),
             }
         }
     }

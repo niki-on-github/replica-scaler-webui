@@ -29,6 +29,8 @@ pub async fn list_targets(
 ) -> Result<Json<Vec<Target>>, ErrorResponse> {
     let mut targets = app.kube.discover(&app.cfg).await;
 
+    app.state.apply_defaults(&targets).await;
+
     for t in &mut targets {
         let key = StateStore::key(&t.kind, &t.namespace, &t.name);
         if let Some(desired) = app.state.get(&key) {

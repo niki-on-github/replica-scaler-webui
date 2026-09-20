@@ -24,6 +24,9 @@ listed, so you can start them from the UI.
 - **Persisted desired state**: the last requested replica count is stored in a
   ConfigMap and re-applied on startup, so a workload that gets deleted and
   recreated (Flux prune / helm upgrade) doesn't drift back to its chart default.
+- **Default state**: a workload with no persisted state yet is brought to its
+  declared default — `active` (1) or `inactive` (0) — via the default-state
+  label, falling back to the `DEFAULT_STATE` env (default `inactive`).
 - **Auto-refresh**: the dashboard polls the Kubernetes API periodically.
 
 ## Selection
@@ -44,6 +47,28 @@ metadata:
   labels:
     replica-scaler.webui.io/managed: "true"
 ```
+
+## Default State
+
+When a workload has **no persisted desired state** (first time it is seen, or
+after the state ConfigMap is cleared), the UI applies a default instead of
+leaving it untouched. The default is resolved in this order:
+
+1. The workload's **default-state label** — `replica-scaler.webui.io/default-state: active|inactive`
+   (configurable via `DEFAULT_STATE_LABEL`; `1`/`0` also accepted).
+2. The **global fallback** `DEFAULT_STATE` env (`active` or `inactive`).
+3. If neither is set, the fallback defaults to **`inactive`**.
+
+```yaml
+metadata:
+  labels:
+    replica-scaler.webui.io/managed: "true"
+    replica-scaler.webui.io/default-state: "inactive"
+```
+
+The resolved default is scaled in and then persisted to the state ConfigMap, so
+it applies **once** — any later Start/Stop from the UI, or a manual scale, wins
+over the label from then on.
 
 ## Deployment
 
@@ -196,6 +221,8 @@ permissions are present (non-fatal).
 | `NAMESPACES` | *(all)* | Comma-separated namespaces to scan. Empty = all namespaces |
 | `SELECTOR_KEY` | `replica-scaler.webui.io/managed` | Label key that marks a workload as manageable |
 | `SELECTOR_VALUE` | `true` | Label value a workload must carry to be managed |
+| `DEFAULT_STATE_LABEL` | `replica-scaler.webui.io/default-state` | Label key describing a workload's initial state (`active`/`inactive`) |
+| `DEFAULT_STATE` | `inactive` | Fallback initial state for workloads with no default-state label |
 | `STATE_CONFIGMAP` | `replica-scaler-state` | Name of the ConfigMap that persists desired state |
 | `STATE_NAMESPACE` | *(pod's own namespace)* | Namespace of the state ConfigMap |
 | `KUBERNETES_SERVICE_HOST` | auto | Kubernetes API host (auto-detected in cluster) |

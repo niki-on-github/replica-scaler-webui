@@ -8,6 +8,10 @@ pub struct Config {
     pub selector_key: String,
     /// Label value that a workload must carry to be manageable.
     pub selector_value: String,
+    /// Label key describing the initial desired state ("active"/"inactive").
+    pub default_state_label: String,
+    /// Fallback desired replicas (0 or 1) for workloads with no default-state label.
+    pub default_state: i64,
     /// Name of the ConfigMap that persists desired state.
     pub state_configmap: String,
     /// Namespace of the state ConfigMap (defaults to the pod's namespace).
@@ -32,6 +36,15 @@ impl Config {
 
         let selector_value = env::var("SELECTOR_VALUE").unwrap_or_else(|_| "true".to_string());
 
+        let default_state_label = env::var("DEFAULT_STATE_LABEL")
+            .unwrap_or_else(|_| "replica-scaler.webui.io/default-state".to_string());
+
+        // Unset or unrecognized DEFAULT_STATE falls back to inactive (0).
+        let default_state = env::var("DEFAULT_STATE")
+            .ok()
+            .and_then(|s| parse_state(&s))
+            .unwrap_or(0);
+
         let state_configmap = env::var("STATE_CONFIGMAP")
             .unwrap_or_else(|_| "replica-scaler-state".to_string());
 
@@ -51,8 +64,19 @@ impl Config {
             namespaces,
             selector_key,
             selector_value,
+            default_state_label,
+            default_state,
             state_configmap,
             state_namespace,
         }
+    }
+}
+
+/// Parse a default-state value. Accepts `active`/`inactive` and `1`/`0`.
+pub fn parse_state(value: &str) -> Option<i64> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "active" | "1" | "true" | "on" => Some(1),
+        "inactive" | "0" | "false" | "off" => Some(0),
+        _ => None,
     }
 }
